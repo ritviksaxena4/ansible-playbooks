@@ -1,0 +1,91 @@
+---
+- name: Configure EKS Worker Nodes (Ubuntu)
+  hosts: all
+  become: true
+  vars:
+    java_version: "21"
+    docker_version: "20.10"
+
+  tasks:
+    # Update and Upgrade the System
+    - name: Update and upgrade the system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    # Install Required Packages
+    - name: Install base packages
+      apt:
+        name:
+          - curl
+          - wget
+          - unzip
+          - git
+          - maven
+        state: present
+
+    # Install OpenJDK Java 21
+    - name: Add Java repository for OpenJDK 21
+      shell: |
+        add-apt-repository ppa:openjdk-r/ppa -y
+        apt-get update
+      args:
+        warn: false
+
+    - name: Install Java {{ java_version }}
+      apt:
+        name: openjdk-{{ java_version }}-jdk
+        state: present
+
+    # Install Docker CE (Community Edition)
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository for Ubuntu
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Install Docker {{ docker_version }}
+      apt:
+        name: docker-ce
+        state: present
+
+    # Configure Docker Daemon
+    - name: Configure Docker daemon settings
+      copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "exec-opts": ["native.cgroupdriver=systemd"],
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "100m"
+            },
+            "storage-driver": "overlay2"
+          }
+
+    # Start and Enable Docker Service
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    # Add User to Docker Group for Non-Sudo Access
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    # Verify Docker Installation (Optional)
+    - name: Verify Docker installation (debugging)
+      shell: docker --version
+
+    # Verify Java Installation (Optional)
+    - name: Verify Java installation (debugging)
+      shell: java --version
+
